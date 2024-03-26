@@ -10,7 +10,7 @@ include ${ENV_FILE}
 export $(shell sed 's/=.*//' ${ENV_FILE})
 endif
 
-CONTAINER_BUILDER?=podman
+CONTAINER_BUILDER?=docker
 CONTAINER_DOCKERFILE?=Dockerfile
 
 ##################################
@@ -29,6 +29,21 @@ build:
 	${CONTAINER_BUILDER} build -f ${CONTAINER_DOCKERFILE} -t ${IMAGE_REPOSITORY} .
 
 ##################################
+
+# Build multi-arch image
+
+PLATFORMS ?= linux/s390x, linux/amd64
+.PHONY: docker-buildx
+docker-buildx: ## Build and push docker image for the manager for cross-platform support
+        # copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
+        sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+        - $(CONTAINER_BUILDER) buildx create --name project-v3-builder
+        $(CONTAINER_BUILDER) buildx use project-v3-builder
+        - $(CONTAINER_BUILDER) buildx build --push --platform=$(PLATFORMS) --tag ${IMAGE_REPOSITORY} -f Dockerfile.cross .
+        - $(CONTAINER_BUILDER) buildx rm project-v3-builder
+        rm Dockerfile.cross
+
+####################################
 
 # PUSH - push image to repository
 
